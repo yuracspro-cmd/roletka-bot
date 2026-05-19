@@ -120,6 +120,7 @@
         <button class="bet-btn btn-red" id="b-red" onclick="startSpin('red')">Красное x2</button>
         <button class="bet-btn btn-black" id="b-black" onclick="startSpin('black')">Черное x2</button>
         <button class="bet-btn btn-zero" id="b-zero" onclick="startSpin('zero')">Зеро x35</button>
+        <button onclick="triggerTopUp()" style="background: #f1c40f; color: #000; border: none; padding: 5px 10px; font-weight: bold; border-radius: 5px; margin-bottom: 10px; cursor: pointer; font-size: 11px;">➕ Пополнить баланс (⭐) </button>
     </div>
 </div>
 
@@ -224,6 +225,14 @@
             };
             tg.sendData(JSON.stringify(betData));
         }, 4300);
+    }
+
+    function triggerTopUp() {
+        // Отправляем специальный текст, который бот распарсит как команду
+        const topupData = {
+            action: "request_topup"
+        };
+        tg.sendData(JSON.stringify(topupData));
     }
 </script>
 </body>
