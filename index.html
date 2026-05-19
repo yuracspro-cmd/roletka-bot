@@ -30,7 +30,6 @@
         }
         h2 { color: #f1c40f; margin: 0 0 15px 0; }
         
-        /* Стили самой рулетки ленты */
         .roulette-container {
             position: relative;
             width: 100%;
@@ -41,7 +40,6 @@
             margin: 20px 0;
             overflow: hidden;
         }
-        /* Стрелка-указатель по центру */
         .pointer {
             position: absolute;
             top: 0;
@@ -129,23 +127,25 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
 
-    // Порядок чисел на реальной рулетке
     const order = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
     const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
     
     const tape = document.getElementById('roulette-tape');
-    const cellWidth = 51; // 50px + 1px border
+    const cellWidth = 51; 
 
-    // Генерируем длинную ленту чисел для эффекта бесконечного кручения
     let totalCells = [];
     for (let i = 0; i < 10; i++) { totalCells = totalCells.concat(order); }
 
     totalCells.forEach(num => {
         const cell = document.createElement('div');
         cell.className = 'cell';
-        if (num === 0) cell.classList.add('zero');
-        elif (RED_NUMBERS.includes(num)) cell.classList.add('red');
-        else cell.classList.add('black');
+        if (num === 0) {
+            cell.classList.add('zero');
+        } else if (RED_NUMBERS.includes(num)) {
+            cell.classList.add('red');
+        } else {
+            cell.classList.add('black');
+        }
         cell.innerText = num;
         tape.appendChild(cell);
     });
@@ -154,29 +154,23 @@
         const amount = parseInt(document.getElementById('bet-amount').value);
         if (isNaN(amount) || amount <= 0) { alert('Введите сумму!'); return; }
 
-        // Блокируем кнопки на время кручения
         document.querySelectorAll('.bet-btn').forEach(b => b.disabled = true);
 
-        // Выбираем случайное число-победитель из колеса (ближе к концу ленты)
         const targetIndex = Math.floor(Math.random() * 37) + (37 * 7); 
         const winningNumber = totalCells[targetIndex];
 
-        // Считаем точную координату сдвига, чтобы число встало по центру стрелки
         const containerWidth = document.querySelector('.roulette-container').offsetWidth;
         const targetX = -(targetIndex * cellWidth - containerWidth / 2 + cellWidth / 2);
 
-        // Запускаем плавную CSS анимацию замедления (4 секунды)
         tape.style.transition = 'transform 4s cubic-bezier(0.1, 1, 0.1, 1)';
         tape.style.transform = `translateX(${targetX}px)`;
 
-        // Ждем окончания анимации
         setTimeout(() => {
             const betData = {
                 bet_amount: amount,
                 bet_type: betType,
                 spin_result: winningNumber
             };
-            // Отправляем точный результат боту и закрываем окно
             tg.sendData(JSON.stringify(betData));
         }, 4300);
     }
