@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TG Roulette</title>
+    <title>TG Roulette Animation</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
-            background: #1e1e1e;
+            background: #1a1a1a;
             color: #ffffff;
             font-family: sans-serif;
             display: flex;
@@ -16,21 +16,67 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
+            overflow: hidden;
+            user-select: none;
         }
         .casino-box {
-            background: #2d2d2d;
-            padding: 25px;
+            background: #2c2c2c;
+            padding: 20px;
             border-radius: 15px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
             text-align: center;
             width: 90%;
-            max-width: 320px;
+            max-width: 350px;
         }
-        h2 { color: #f1c40f; margin-top: 0; }
+        h2 { color: #f1c40f; margin: 0 0 15px 0; }
+        
+        /* Стили самой рулетки ленты */
+        .roulette-container {
+            position: relative;
+            width: 100%;
+            height: 60px;
+            background: #111;
+            border: 3px solid #f1c40f;
+            border-radius: 8px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        /* Стрелка-указатель по центру */
+        .pointer {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 100%;
+            background: #f1c40f;
+            z-index: 10;
+            box-shadow: 0 0 8px #f1c40f;
+        }
+        .tape {
+            display: flex;
+            width: max-content;
+            height: 100%;
+            transform: translateX(0);
+        }
+        .cell {
+            width: 50px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            border-right: 1px solid #222;
+        }
+        .red { background: #e74c3c; }
+        .black { background: #2c3e50; }
+        .zero { background: #2ecc71; }
+
         input {
             width: 80%;
             padding: 10px;
-            margin: 15px 0;
+            margin-bottom: 15px;
             border-radius: 5px;
             border: 2px solid #444;
             background: #111;
@@ -38,41 +84,44 @@
             font-size: 16px;
             text-align: center;
         }
-        .bet-buttons {
+        .btn-group {
             display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 20px;
+            gap: 8px;
+            margin-bottom: 10px;
         }
-        .btn {
+        .bet-btn {
             flex: 1;
-            padding: 12px;
+            padding: 12px 5px;
             border: none;
             border-radius: 5px;
             font-weight: bold;
             color: white;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
+            transition: 0.2s;
         }
+        .bet-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .btn-red { background: #e74c3c; }
         .btn-black { background: #2c3e50; }
         .btn-zero { background: #2ecc71; }
-        
-        .btn:active { opacity: 0.7; }
     </style>
 </head>
 <body>
 
 <div class="casino-box">
     <h2>🎰 РУЛЕТКА 🎰</h2>
-    <p style="color: #aaa; font-size: 14px;">Введите сумму ставки:</p>
+    
+    <div class="roulette-container">
+        <div class="pointer"></div>
+        <div class="tape" id="roulette-tape"></div>
+    </div>
+
     <input type="number" id="bet-amount" value="100" min="10">
 
-    <p style="color: #aaa; font-size: 14px;">Выберите на что ставить:</p>
-    <div class="bet-buttons">
-        <button class="btn btn-red" onclick="makeBet('red')">Красное (x2)</button>
-        <button class="btn btn-black" onclick="makeBet('black')">Черное (x2)</button>
-        <button class="btn btn-zero" onclick="makeBet('zero')">Зеро (x35)</button>
+    <div class="btn-group">
+        <button class="bet-btn btn-red" id="b-red" onclick="startSpin('red')">Красное x2</button>
+        <button class="bet-btn btn-black" id="b-black" onclick="startSpin('black')">Черное x2</button>
+        <button class="bet-btn btn-zero" id="b-zero" onclick="startSpin('zero')">Зеро x35</button>
     </div>
 </div>
 
@@ -80,22 +129,56 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
 
-    function makeBet(color) {
-        const amountInput = document.getElementById('bet-amount').value;
-        const amount = parseInt(amountInput);
+    // Порядок чисел на реальной рулетке
+    const order = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+    const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+    
+    const tape = document.getElementById('roulette-tape');
+    const cellWidth = 51; // 50px + 1px border
 
-        if (isNaN(amount) || amount <= 0) {
-            alert('Введите корректную сумму ставки!');
-            return;
-        }
+    // Генерируем длинную ленту чисел для эффекта бесконечного кручения
+    let totalCells = [];
+    for (let i = 0; i < 10; i++) { totalCells = totalCells.concat(order); }
 
-        // Собираем данные о ставке и отправляем боту
-        const betData = {
-            bet_amount: amount,
-            bet_type: color
-        };
+    totalCells.forEach(num => {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        if (num === 0) cell.classList.add('zero');
+        elif (RED_NUMBERS.includes(num)) cell.classList.add('red');
+        else cell.classList.add('black');
+        cell.innerText = num;
+        tape.appendChild(cell);
+    });
 
-        tg.sendData(JSON.stringify(betData));
+    function startSpin(betType) {
+        const amount = parseInt(document.getElementById('bet-amount').value);
+        if (isNaN(amount) || amount <= 0) { alert('Введите сумму!'); return; }
+
+        // Блокируем кнопки на время кручения
+        document.querySelectorAll('.bet-btn').forEach(b => b.disabled = true);
+
+        // Выбираем случайное число-победитель из колеса (ближе к концу ленты)
+        const targetIndex = Math.floor(Math.random() * 37) + (37 * 7); 
+        const winningNumber = totalCells[targetIndex];
+
+        // Считаем точную координату сдвига, чтобы число встало по центру стрелки
+        const containerWidth = document.querySelector('.roulette-container').offsetWidth;
+        const targetX = -(targetIndex * cellWidth - containerWidth / 2 + cellWidth / 2);
+
+        // Запускаем плавную CSS анимацию замедления (4 секунды)
+        tape.style.transition = 'transform 4s cubic-bezier(0.1, 1, 0.1, 1)';
+        tape.style.transform = `translateX(${targetX}px)`;
+
+        // Ждем окончания анимации
+        setTimeout(() => {
+            const betData = {
+                bet_amount: amount,
+                bet_type: betType,
+                spin_result: winningNumber
+            };
+            // Отправляем точный результат боту и закрываем окно
+            tg.sendData(JSON.stringify(betData));
+        }, 4300);
     }
 </script>
 </body>
