@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TG Roulette</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            background: #1e1e1e;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .casino-box {
+            background: #2d2d2d;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 90%;
+            max-width: 320px;
+        }
+        h2 { color: #f1c40f; margin-top: 0; }
+        input {
+            width: 80%;
+            padding: 10px;
+            margin: 15px 0;
+            border-radius: 5px;
+            border: 2px solid #444;
+            background: #111;
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+        }
+        .bet-buttons {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-red { background: #e74c3c; }
+        .btn-black { background: #2c3e50; }
+        .btn-zero { background: #2ecc71; }
+        
+        .btn:active { opacity: 0.7; }
+    </style>
+</head>
+<body>
+
+<div class="casino-box">
+    <h2>🎰 РУЛЕТКА 🎰</h2>
+    <p style="color: #aaa; font-size: 14px;">Введите сумму ставки:</p>
+    <input type="number" id="bet-amount" value="100" min="10">
+
+    <p style="color: #aaa; font-size: 14px;">Выберите на что ставить:</p>
+    <div class="bet-buttons">
+        <button class="btn btn-red" onclick="makeBet('red')">Красное (x2)</button>
+        <button class="btn btn-black" onclick="makeBet('black')">Черное (x2)</button>
+        <button class="btn btn-zero" onclick="makeBet('zero')">Зеро (x35)</button>
+    </div>
+</div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    function makeBet(color) {
+        const amountInput = document.getElementById('bet-amount').value;
+        const amount = parseInt(amountInput);
+
+        if (isNaN(amount) || amount <= 0) {
+            alert('Введите корректную сумму ставки!');
+            return;
+        }
+
+        // Собираем данные о ставке и отправляем боту
+        const betData = {
+            bet_amount: amount,
+            bet_type: color
+        };
+
+        tg.sendData(JSON.stringify(betData));
+    }
+</script>
+</body>
+</html>
