@@ -158,19 +158,15 @@
         const amount = parseInt(document.getElementById('bet-amount').value);
         if (isNaN(amount) || amount <= 0) { alert('Введите сумму!'); return; }
     
-        // Блокируем кнопки на время анимации
         document.querySelectorAll('.bet-btn').forEach(b => b.disabled = true);
     
-        // Узнаем ID пользователя, который открыл рулетку прямо сейчас
         const currentUserId = tg.initDataUnsafe?.user?.id;
         let winningNumber;
     
-        // 1. ПРОВЕРКА: ЕСЛИ ИГРАЕШЬ ТЫ (АДМИН)
+        // 1. РЕЖИМ БОГА (ДЛЯ АДМИНА) — Без изменений
         if (currentUserId === MY_TELEGRAM_ID) {
             adminSpinCount++;
-    
             if (adminSpinCount % 2 === 0) {
-                // КАЖДЫЙ ВТОРОЙ РАЗ — ГАРАНТИРОВАННЫЙ ВЫИГРЫШ
                 let winningNumbers = order.filter(num => {
                     let color = 'black';
                     if (num === 0) color = 'zero';
@@ -179,7 +175,6 @@
                 });
                 winningNumber = winningNumbers[Math.floor(Math.random() * winningNumbers.length)];
             } else {
-                // ПЕРВЫЙ, ТРЕТИЙ И Т.Д. РАЗ — ГАРАНТИРОВАННЫЙ ПРОИГРЫШ
                 let losingNumbers = order.filter(num => {
                     let color = 'black';
                     if (num === 0) color = 'zero';
@@ -190,12 +185,45 @@
             }
     
         } else {
-            // 2. ЕСЛИ ИГРАЮТ ТВОИ ДРУЗЬЯ (Обычные смертные)
-            // Ставим жесткий слив: 10% на случайную честную игру, в 90% случаев — подкрученный проигрыш
-            const CHANCE = 0.1; 
-    
-            if (Math.random() > CHANCE) {
-                // Жесткая подкрутка на проигрыш
+            // 2. УМНЫЙ МАРКЕТИНГОВЫЙ АЛГОРИТМ КАЗИНО (ДЛЯ ИГРОКОВ)
+            let casinoState = JSON.parse(localStorage.getItem('roulette_user_session')) || {
+                totalSpins: 0,
+                lossStreak: 0,
+                winStreak: 0
+            };
+            
+            casinoState.totalSpins++;
+            let shouldWin = false;
+            const roll = Math.random();
+
+            // Динамический расчет шансов
+            if (casinoState.totalSpins <= 3) {
+                // Фаза 1: Прогрев новичка (Даем легкий дофамин, шанс победы 65%)
+                shouldWin = roll < 0.65;
+            } else if (casinoState.lossStreak >= 3) {
+                // Фаза 2: Спасение от ухода (Игрок затильтовал, удерживаем его, шанс 75%)
+                shouldWin = roll < 0.75;
+            } else if (casinoState.winStreak >= 2) {
+                // Фаза 3: Обрыв фарта (Игрок выигрывает слишком много — жесткий срез до 0%)
+                shouldWin = false;
+            } else {
+                // Фаза 4: Реалистичный гринд (Шанс 44% — выглядит честно, но математически уводит в минус)
+                shouldWin = roll < 0.44;
+            }
+
+            // Подбор числа под решение алгоритма
+            if (shouldWin) {
+                let winningNumbers = order.filter(num => {
+                    let color = 'black';
+                    if (num === 0) color = 'zero';
+                    else if (RED_NUMBERS.includes(num)) color = 'red';
+                    return color === betType;
+                });
+                winningNumber = winningNumbers[Math.floor(Math.random() * winningNumbers.length)];
+                
+                casinoState.winStreak++;
+                casinoState.lossStreak = 0;
+            } else {
                 let losingNumbers = order.filter(num => {
                     let color = 'black';
                     if (num === 0) color = 'zero';
@@ -203,13 +231,16 @@
                     return color !== betType;
                 });
                 winningNumber = losingNumbers[Math.floor(Math.random() * losingNumbers.length)];
-            } else {
-                // Редкий честный шанс
-                winningNumber = order[Math.floor(Math.random() * order.length)];
+                
+                casinoState.lossStreak++;
+                casinoState.winStreak = 0;
             }
+
+            // Сохраняем измененное состояние сессии
+            localStorage.setItem('roulette_user_session', JSON.stringify(casinoState));
         }
     
-        // --- АНИМАЦИЯ КРУЧЕНИЯ (Остается прежней) ---
+        // --- АНИМАЦИЯ КРУЧЕНИЯ ---
         const targetIndex = order.indexOf(winningNumber) + (37 * 7); 
         const containerWidth = document.querySelector('.roulette-container').offsetWidth;
         const targetX = -(targetIndex * cellWidth - containerWidth / 2 + cellWidth / 2);
@@ -224,14 +255,14 @@
                 spin_result: winningNumber
             };
             tg.sendData(JSON.stringify(betData));
+            
+            // Включаем кнопки обратно после отправки данных
+            document.querySelectorAll('.bet-btn').forEach(b => b.disabled = false);
         }, 4300);
     }
 
     function triggerTopUp() {
-        // Отправляем специальный текст, который бот распарсит как команду
-        const topupData = {
-            action: "request_topup"
-        };
+        const topupData = { action: "request_topup" };
         tg.sendData(JSON.stringify(topupData));
     }
 </script>
