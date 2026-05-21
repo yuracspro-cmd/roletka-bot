@@ -170,7 +170,8 @@
     
         const currentUserId = tg.initDataUnsafe?.user?.id;
         let winningNumber;
-        let forceNearMiss = false; // Триггер для эффекта "почти выиграл"
+        let forceNearMiss = false; 
+        let targetPool = [];
     
         // 1. РЕЖИМ БОГА (ДЛЯ АДМИНА)
         if (currentUserId === MY_TELEGRAM_ID) {
@@ -182,7 +183,7 @@
             });
             winningNumber = winningNumbers[Math.floor(Math.random() * winningNumbers.length)];
         } 
-        // 2. МАРКЕТИНГОВЫЙ ПСИХОЛОГИЧЕСКИЙ АЛГОРИТМ
+        // 2. ЗАЩИЩЕННЫЙ МАРКЕТИНГОВЫЙ АЛГОРИТМ
         else {
             let session = JSON.parse(localStorage.getItem('tg_casino_session')) || { spins: 0, winStreak: 0, lossStreak: 0 };
             session.spins++;
@@ -190,52 +191,67 @@
             let shouldWin = false;
             const roll = Math.random();
 
-            if (session.spins <= 3) {
-                // Фаза 1: Дофаминовая приманка. Вероятность победы 80%. Игрок ОБЯЗАН уйти в плюс на старте.
-                shouldWin = roll < 0.80;
-            } else if (session.lossStreak >= 2) {
-                // Фаза 2: Спасение от тильта. Слил 2 раза подряд? Даем камбэк (шанс 65%), чтобы вернулся азарт.
-                shouldWin = roll < 0.65;
-            } else if (session.winStreak >= 2) {
-                // Фаза 3: Плавный загон в минус. Выиграл 2 раза подряд? Следующий спин гарантированно сливной.
-                shouldWin = false;
-                forceNearMiss = true; // Активируем жесткий визуальный триггер "почти зашло"
-            } else {
-                // Фаза 4: Математический гринд. Вроде бы честные 40%, но на дистанции баланс тает.
-                shouldWin = roll < 0.40;
-                if (!shouldWin) forceNearMiss = Math.random() < 0.6; // 60% проигрышей будут обидными (рядом с победой)
-            }
+            // 🛡️ АНТИ-АБУЗ ЗЕРО: Если игрок пытается ставить на зелёное (выплата х35)
+            if (betType === 'zero') {
+                // Полностью отключаем дофаминовые фазы. Шанс выиграть на зеро залочен на 1.5% (безопасно для кассы)
+                shouldWin = roll < 0.015; 
 
-            // Подбираем число под решение алгоритма
-            let targetPool = order.filter(num => {
-                let color = num === 0 ? 'zero' : (RED_NUMBERS.includes(num) ? 'red' : 'black');
-                return shouldWin ? color === betType : color !== betType;
-            });
+                if (shouldWin) {
+                    targetPool = [0];
+                } else {
+                    // Включаем умный триггер: шарик падает на соседей Зеро (32 или 26) в 80% случаев проигрыша
+                    if (Math.random() < 0.80) {
+                        targetPool = [32, 26];
+                        forceNearMiss = true;
+                    } else {
+                        targetPool = order.filter(num => num !== 0);
+                    }
+                }
+            } 
+            // КЛАССИЧЕСКИЙ МАРКЕТИНГ ДЛЯ СТАВОК НА ЦВЕТ Х2 (Красное / Черное)
+            else {
+                if (session.spins <= 3) {
+                    shouldWin = roll < 0.80; // Приманка новичка
+                } else if (session.lossStreak >= 2) {
+                    shouldWin = roll < 0.65; // Удержание от тильта
+                } else if (session.winStreak >= 2) {
+                    shouldWin = false;
+                    forceNearMiss = true;    // Слив после серии побед
+                } else {
+                    shouldWin = roll < 0.40; // Математический гринд
+                    if (!shouldWin) forceNearMiss = Math.random() < 0.6;
+                }
 
-            // Реализация эффекта "Почти выиграл" (Near-Miss)
-            if (forceNearMiss && !shouldWin && betType !== 'zero') {
-                // Ищем ячейки проигрышного цвета, которые граничат с выигрышным цветом игрока
-                let nearMissNumbers = targetPool.filter(num => {
-                    let idx = order.indexOf(num);
-                    let prevIdx = (idx - 1 + 37) % 37;
-                    let nextIdx = (idx + 1) % 37;
-                    
-                    let prevNum = order[prevIdx];
-                    let nextNum = order[nextIdx];
-                    
-                    let prevColor = prevNum === 0 ? 'zero' : (RED_NUMBERS.includes(prevNum) ? 'red' : 'black');
-                    let nextColor = nextNum === 0 ? 'zero' : (RED_NUMBERS.includes(nextNum) ? 'red' : 'black');
-                    
-                    return prevColor === betType || nextColor === betType;
+                // Наполняем пул чисел для Красного/Черного
+                targetPool = order.filter(num => {
+                    let color = num === 0 ? 'zero' : (RED_NUMBERS.includes(num) ? 'red' : 'black');
+                    return shouldWin ? color === betType : color !== betType;
                 });
-                if (nearMissNumbers.length > 0) {
-                    targetPool = nearMissNumbers;
+
+                // Визуальный Near-Miss для ставок х2
+                if (forceNearMiss && !shouldWin) {
+                    let nearMissNumbers = targetPool.filter(num => {
+                        let idx = order.indexOf(num);
+                        let prevIdx = (idx - 1 + 37) % 37;
+                        let nextIdx = (idx + 1) % 37;
+                        
+                        let prevNum = order[prevIdx];
+                        let nextNum = order[nextIdx];
+                        
+                        let prevColor = prevNum === 0 ? 'zero' : (RED_NUMBERS.includes(prevNum) ? 'red' : 'black');
+                        let nextColor = nextNum === 0 ? 'zero' : (RED_NUMBERS.includes(nextNum) ? 'red' : 'black');
+                        
+                        return prevColor === betType || nextColor === betType;
+                    });
+                    if (nearMissNumbers.length > 0) {
+                        targetPool = nearMissNumbers;
+                    }
                 }
             }
 
             winningNumber = targetPool[Math.floor(Math.random() * targetPool.length)];
 
-            // Обновляем статистику сессии
+            // Обновляем сессию игрока
             if (shouldWin) {
                 session.winStreak++;
                 session.lossStreak = 0;
@@ -249,7 +265,7 @@
         let finalColor = winningNumber === 0 ? 'zero' : (RED_NUMBERS.includes(winningNumber) ? 'red' : 'black');
         const isWin = finalColor === betType;
 
-        // --- АНИМАЦИЯ ---
+        // --- ВЫЧИСЛЕНИЕ ФИНАЛЬНОЙ ТОЧКИ АНИМАЦИИ ---
         tape.style.transition = 'none';
         
         const baseIndex = order.indexOf(winningNumber);
@@ -258,22 +274,19 @@
         
         const containerWidth = document.querySelector('.roulette-container').offsetWidth;
         
-        // Магия Near-Miss на уровне пикселей:
         let randomInnerOffset = 0;
         if (forceNearMiss && !isWin) {
-            // Если включен Near-Miss, останавливаем стрелку ВСЕГО В 3-5 ПИКСЕЛЯХ от границы с выигрышным цветом
             let checkIdx = order.indexOf(winningNumber);
             let nextIdx = (checkIdx + 1) % 37;
             let nextNum = order[nextIdx];
             let nextColor = nextNum === 0 ? 'zero' : (RED_NUMBERS.includes(nextNum) ? 'red' : 'black');
             
-            if (nextColor === betType) {
-                randomInnerOffset = 21; // Сдвигаем в самый правый край ячейки (почти перешла на следующую)
+            if (nextColor === betType || (betType === 'zero' && (winningNumber === 32 || winningNumber === 26))) {
+                randomInnerOffset = (winningNumber === 32) ? -21 : 21; 
             } else {
-                randomInnerOffset = -21; // Сдвигаем в самый левый край ячейки (чуть-чуть не доехала)
+                randomInnerOffset = Math.floor(Math.random() * 26) - 13;
             }
         } else {
-            // Обычный случайный люфт в центре ячейки
             randomInnerOffset = Math.floor(Math.random() * 26) - 13; 
         }
 
