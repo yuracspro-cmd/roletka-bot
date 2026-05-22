@@ -58,7 +58,7 @@
             transform: translateX(0);
         }
         .cell {
-            width: 60px; /* Увеличили до 60px для лучшего отображения */
+            width: 60px;
             height: 100%;
             display: flex;
             align-items: center;
@@ -66,8 +66,6 @@
             font-weight: bold;
             font-size: 18px;
             border-right: 1px solid #222;
-            
-            /* Жёсткая фиксация размеров во флекс-контейнере */
             box-sizing: border-box;
             flex-shrink: 0;
             flex-grow: 0;
@@ -141,25 +139,32 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
 
-    // Защита от абуза: Проверка незавершенного спина при старте приложения
+    // ЗАЩИТА ОТ СЕЙВА: Срабатывает сразу при загрузке страницы
     window.addEventListener('DOMContentLoaded', () => {
         let session = JSON.parse(localStorage.getItem('tg_casino_session')) || { winStreak: 0, lossStreak: 0 };
         
         if (session.last_bet_active && session.last_bet_amount) {
-            alert(`🚨 Вы покинули игру во время спина. Ставка ${session.last_bet_amount} ⭐ аннулирована.`);
-            
-            // Отправляем боту техническое поражение за попытку обмана
-            const penaltyData = {
-                bet_amount: session.last_bet_amount,
-                bet_type: session.last_bet_type,
-                spin_result: "PLAYER_DISCONNECTED_ABUSE",
-                win: false
-            };
-            tg.sendData(JSON.stringify(penaltyData));
-            
-            // Сбрасываем флаг активности ставки
+            // Сохраняем данные во временные переменные
+            const penaltyAmount = session.last_bet_amount;
+            const penaltyType = session.last_bet_type || 'unknown';
+
+            // СБРАСЫВАЕМ флаг активности СРАЗУ, чтобы избежать бесконечного цикла при перезапусках
             session.last_bet_active = false;
             localStorage.setItem('tg_casino_session', JSON.stringify(session));
+
+            // Показываем окно наказания
+            alert(`🚨 Вы вышли из игры во время вращения!\nСтавка ${penaltyAmount} ⭐ аннулирована и списана с баланса.`);
+            
+            // Отправляем боту команду на списание
+            const penaltyData = {
+                bet_amount: penaltyAmount,
+                bet_type: penaltyType,
+                spin_result: "ABUSE_DISCONNECT",
+                win: false,
+                is_penalty: true // Специальный флаг для твоего бэкенда
+            };
+            
+            tg.sendData(JSON.stringify(penaltyData));
         }
     });
 
@@ -167,7 +172,7 @@
     const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
     
     const tape = document.getElementById('roulette-tape');
-    const cellWidth = 60; // Строго соответствует width в CSS с учётом border-box
+    const cellWidth = 60; 
 
     let totalCells = [];
     for (let i = 0; i < 20; i++) { totalCells = totalCells.concat(order); }
@@ -267,7 +272,7 @@
             localStorage.setItem('tg_casino_session', JSON.stringify(session));
         }
     
-        // Фиксируем активную сессию ДО анимации (для предотвращения перезагрузок)
+        // Включаем режим отслеживания ДО начала анимации
         let lockSession = JSON.parse(localStorage.getItem('tg_casino_session')) || { winStreak: 0, lossStreak: 0 };
         lockSession.last_bet_active = true;
         lockSession.last_bet_amount = amount;
@@ -277,7 +282,7 @@
         let finalColor = winningNumber === 0 ? 'zero' : (RED_NUMBERS.includes(winningNumber) ? 'red' : 'black');
         const isWin = finalColor === betType;
 
-        // АНИМАЦИЯ ВРАЩЕНИЯ
+        // АНИМАЦИЯ
         tape.style.transition = 'none';
         
         const baseIndex = order.indexOf(winningNumber);
@@ -285,7 +290,6 @@
         const targetIndex = baseIndex + (37 * minCircles); 
         const containerWidth = document.querySelector('.roulette-container').offsetWidth;
         
-        // Отклонение внутри ячейки сужено до 20px, чтобы стрелка не вылезала на соседние числа
         let randomInnerOffset = Math.floor(Math.random() * 20) - 10;
         const targetX = -(targetIndex * cellWidth - containerWidth / 2 + cellWidth / 2 + randomInnerOffset);
     
@@ -299,10 +303,11 @@
                 bet_amount: amount,
                 bet_type: betType,
                 spin_result: winningNumber,
-                win: isWin
+                win: isWin,
+                is_penalty: false
             };
 
-            // Спин успешно завершен — снимаем флаг защиты, игрок ничего не нарушил
+            // Спин завершился честно — снимаем метку нарушителя
             let releaseSession = JSON.parse(localStorage.getItem('tg_casino_session'));
             if (releaseSession) {
                 releaseSession.last_bet_active = false;
