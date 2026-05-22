@@ -141,6 +141,28 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
 
+    // Защита от абуза: Проверка незавершенного спина при старте приложения
+    window.addEventListener('DOMContentLoaded', () => {
+        let session = JSON.parse(localStorage.getItem('tg_casino_session')) || { winStreak: 0, lossStreak: 0 };
+        
+        if (session.last_bet_active && session.last_bet_amount) {
+            alert(`🚨 Вы покинули игру во время спина. Ставка ${session.last_bet_amount} ⭐ аннулирована.`);
+            
+            // Отправляем боту техническое поражение за попытку обмана
+            const penaltyData = {
+                bet_amount: session.last_bet_amount,
+                bet_type: session.last_bet_type,
+                spin_result: "PLAYER_DISCONNECTED_ABUSE",
+                win: false
+            };
+            tg.sendData(JSON.stringify(penaltyData));
+            
+            // Сбрасываем флаг активности ставки
+            session.last_bet_active = false;
+            localStorage.setItem('tg_casino_session', JSON.stringify(session));
+        }
+    });
+
     const order = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
     const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
     
@@ -245,6 +267,13 @@
             localStorage.setItem('tg_casino_session', JSON.stringify(session));
         }
     
+        // Фиксируем активную сессию ДО анимации (для предотвращения перезагрузок)
+        let lockSession = JSON.parse(localStorage.getItem('tg_casino_session')) || { winStreak: 0, lossStreak: 0 };
+        lockSession.last_bet_active = true;
+        lockSession.last_bet_amount = amount;
+        lockSession.last_bet_type = betType;
+        localStorage.setItem('tg_casino_session', JSON.stringify(lockSession));
+
         let finalColor = winningNumber === 0 ? 'zero' : (RED_NUMBERS.includes(winningNumber) ? 'red' : 'black');
         const isWin = finalColor === betType;
 
@@ -272,6 +301,14 @@
                 spin_result: winningNumber,
                 win: isWin
             };
+
+            // Спин успешно завершен — снимаем флаг защиты, игрок ничего не нарушил
+            let releaseSession = JSON.parse(localStorage.getItem('tg_casino_session'));
+            if (releaseSession) {
+                releaseSession.last_bet_active = false;
+                localStorage.setItem('tg_casino_session', JSON.stringify(releaseSession));
+            }
+
             tg.sendData(JSON.stringify(betData));
             isSpinning = false;
             document.querySelectorAll('.bet-btn, .btn-topup').forEach(b => b.disabled = false);
